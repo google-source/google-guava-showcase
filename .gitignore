@@ -1,6 +1,8 @@
-*.class
+.*
+!.gitignore
+target
+build
+bin
+test-output
+*.iml
 
-# Package Files #
-*.jar
-*.war
-*.ear

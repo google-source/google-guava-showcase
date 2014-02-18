@@ -14,8 +14,7 @@ import com.google.common.collect.Lists;
  * Showcase for class base.Optional.
  * <pre>
  * Reference to wiki page:
- *    http://code.google.com/p/guava-libraries/wiki/UsingAndAvoidingNullExplained 
- *    chapter Optional
+ *    http://code.google.com/p/guava-libraries/wiki/UsingAndAvoidingNullExplained#Optional
  * </pre>
  * @author Sky Ao
  *

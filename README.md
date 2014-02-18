@@ -22,7 +22,7 @@ A better command is recommended to parpare source and javadoc to help you study:
 
     mvn eclipse:clean eclipse:eclipse -DdownloadSources=true -DdownloadJavadocs=true
 
-For windows user, "mvn-project.bat" file is provided to help you. Just double click it.
+For windows & eclipse user, "mvn-eclipse.bat" file is provided to help you. Just double click it.
 
 # project construction
 In this showcase project, there are some subprojects:

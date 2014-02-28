@@ -3,13 +3,16 @@ package com.github.skyao.showcase.guava.util.concurrent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.testng.annotations.Test;
 
 import com.google.common.base.Function;
+import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.CheckedFuture;
 import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.FutureCallback;
@@ -124,6 +127,168 @@ public class FuturesShowcase {
                 });
 
         assertThat(faultTolerantFuture.get()).isEqualTo(0);
+    }
+
+    @Test
+    public void transform_asyncFunction() throws Exception, ExecutionException {
+        ListenableFuture<String> inputFuture = Futures.immediateFuture("123");
+        ListenableFuture<Integer> resultFuture = Futures.transform(inputFuture, new AsyncFunction<String, Integer>() {
+            @Override
+            public ListenableFuture<Integer> apply(String input) {
+                return Futures.immediateFuture(Integer.parseInt(input) * 2);
+            }
+        });
+        assertThat(Futures.getUnchecked(resultFuture)).isEqualTo(246);
+    }
+
+    @Test
+    public void transform_function() throws Exception, ExecutionException {
+        ListenableFuture<String> inputFuture = Futures.immediateFuture("123");
+        ListenableFuture<Integer> resultFuture = Futures.transform(inputFuture, new Function<String, Integer>() {
+            @Override
+            public Integer apply(String input) {
+                return Integer.parseInt(input) * 2;
+            }
+        });
+        assertThat(Futures.getUnchecked(resultFuture)).isEqualTo(246);
+    }
+
+    @Test
+    public void lazyTransform() throws Exception, ExecutionException {
+        Future<String> inputFuture = Futures.immediateFuture("123");
+        Future<Integer> resultFuture = Futures.lazyTransform(inputFuture, new Function<String, Integer>() {
+            @Override
+            public Integer apply(String input) {
+                return Integer.parseInt(input) * 2;
+            }
+        });
+        assertThat(Futures.getUnchecked(resultFuture)).isEqualTo(246);
+    }
+
+    @Test
+    public void dereference() throws Exception, ExecutionException {
+        ListenableFuture<String> originalFuture = Futures.immediateFuture("123");
+        Function<String, ListenableFuture<Integer>> function = new Function<String, ListenableFuture<Integer>>() {
+            @Override
+            public ListenableFuture<Integer> apply(String input) {
+                return Futures.immediateFuture(Integer.valueOf(input));
+            }
+        };
+        ListenableFuture<ListenableFuture<Integer>> nestedFuture = Futures.transform(originalFuture, function);
+
+        // ListenableFuture<ListenableFuture<Integer>> simplify to ListenableFuture<Integer>
+        ListenableFuture<Integer> resultFuture = Futures.dereference(nestedFuture);
+        assertThat(Futures.getUnchecked(resultFuture)).isEqualTo(123);
+    }
+
+    @Test
+    public void allAsList() throws Exception, ExecutionException {
+        ListenableFuture<String> aFuture = Futures.immediateFuture("a");
+        ListenableFuture<String> bFuture = Futures.immediateFuture("b");
+        ListenableFuture<String> cFuture = Futures.immediateFuture("c");
+
+        @SuppressWarnings("unchecked")
+        ListenableFuture<List<String>> allFuture = Futures.allAsList(aFuture, bFuture, cFuture);
+        List<String> resultList = Futures.getUnchecked(allFuture);
+        assertThat(resultList).containsExactly("a", "b", "c");
+    }
+
+    @Test(expectedExceptions = UncheckedExecutionException.class)
+    public void allAsList_failure() throws Exception, ExecutionException {
+        ListenableFuture<String> aFuture = Futures.immediateFuture("a");
+        ListenableFuture<String> bFuture = Futures.immediateFailedFuture(new RuntimeException());
+        ListenableFuture<String> cFuture = Futures.immediateFuture("c");
+
+        @SuppressWarnings("unchecked")
+        ListenableFuture<List<String>> allFuture = Futures.allAsList(aFuture, bFuture, cFuture);
+        Futures.getUnchecked(allFuture);
+    }
+
+    @Test
+    public void nonCancellationPropagating_cencelWrapper() throws Exception, ExecutionException {
+        ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(1));
+
+        ListenableFuture<String> actualFuture = executorService.submit(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                // sleep so that the main thread have the time to cancel it
+                Thread.sleep(200);
+                return "aaa";
+            }
+
+        });
+
+        ListenableFuture<String> wrapper = Futures.nonCancellationPropagating(actualFuture);
+        // we cancel the wrapper future
+        assertThat(wrapper.cancel(true)).isTrue();
+        // wrapper future is cancelled
+        assertThat(wrapper.isCancelled()).isTrue();
+        // actual future is NOT cancelled
+        assertThat(actualFuture.isCancelled()).isFalse();
+    }
+
+    @Test
+    public void nonCancellationPropagating_cencelActual() throws Exception, ExecutionException {
+        ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(1));
+        ListenableFuture<String> actualFuture = executorService.submit(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                // sleep so that the main thread have the time to cancel it
+                Thread.sleep(200);
+                return "aaa";
+            }
+        });
+
+        ListenableFuture<String> wrapper = Futures.nonCancellationPropagating(actualFuture);
+        // we cancel the actualFuture future
+        assertThat(actualFuture.cancel(true)).isTrue();
+        // actual future is cancelled
+        assertThat(actualFuture.isCancelled()).isTrue();
+        // wrapper future is also cancelled
+        assertThat(wrapper.isCancelled()).isTrue();
+    }
+
+    @Test
+    public void nonCancellationPropagating() throws Exception, ExecutionException {
+        ListeningExecutorService executorService = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(1));
+        ListenableFuture<String> actualFuture = executorService.submit(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                // sleep so that the main thread have the time to cancel it
+                Thread.sleep(200);
+                return "aaa";
+            }
+        });
+
+        ListenableFuture<String> wrapper = Futures.nonCancellationPropagating(actualFuture);
+        assertThat(wrapper.cancel(true)).isTrue();
+        assertThat(wrapper.isCancelled()).isTrue();
+        assertThat(actualFuture.isCancelled()).isFalse();
+    }
+
+    @Test
+    public void successfulAsList() throws Exception, ExecutionException {
+        ListenableFuture<String> aFuture = Futures.immediateFuture("a");
+        ListenableFuture<String> bFuture = Futures.immediateFuture("b");
+        ListenableFuture<String> cFuture = Futures.immediateFuture("c");
+
+        @SuppressWarnings("unchecked")
+        ListenableFuture<List<String>> allFuture = Futures.successfulAsList(aFuture, bFuture, cFuture);
+        List<String> resultList = Futures.getUnchecked(allFuture);
+        assertThat(resultList).containsExactly("a", "b", "c");
+    }
+
+    @Test
+    public void successfulAsList_failure() throws Exception, ExecutionException {
+        ListenableFuture<String> aFuture = Futures.immediateFuture("a");
+        ListenableFuture<String> bFuture = Futures.immediateFailedFuture(new RuntimeException());
+        ListenableFuture<String> cFuture = Futures.immediateFuture("c");
+
+        @SuppressWarnings("unchecked")
+        ListenableFuture<List<String>> allFuture = Futures.successfulAsList(aFuture, bFuture, cFuture);
+        List<String> resultList = Futures.getUnchecked(allFuture);
+        // bFuture fails so the position will be null
+        assertThat(resultList).containsExactly("a", null, "c");
     }
 
     @Test

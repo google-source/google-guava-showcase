@@ -35,4 +35,4 @@ In this showcase project, there are some subprojects:
 + [guava web site](http://code.google.com/p/guava-libraries/)
 + [guava javadoc](http://docs.guava-libraries.googlecode.com/git-history/release/javadoc/index.html)
 + [guava Wiki](http://code.google.com/p/guava-libraries/wiki/GuavaExplained?tm=6)
-
++ [guava google groups](https://groups.google.com/forum/#!forum/guava-discuss)
